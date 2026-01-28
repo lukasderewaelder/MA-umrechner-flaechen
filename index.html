@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Umrechner Flächeneinheiten</title>
+    <title>Interaktive Stellenwerttafel: Flächen (km² bis mm²)</title>
     
     <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
@@ -47,7 +47,6 @@
 
 
         // --- CONFIGURATION ---
-        // Erweitert um km², ha, a
         const UNITS = [
             { id: 'km2', label: 'km²', sub: 'Quadratkilometer', color: 'bg-fuchsia-100', border: 'border-fuchsia-200' },
             { id: 'ha',  label: 'ha',  sub: 'Hektar',           color: 'bg-rose-100',    border: 'border-rose-200' },
@@ -58,40 +57,31 @@
             { id: 'mm2', label: 'mm²', sub: 'Quadratmillimeter',color: 'bg-blue-100',    border: 'border-blue-200' },
         ];
 
-        // Faktoren relativ zu mm² (Einer)
         const COLUMNS = [
-            // km²
             { id: 'km2_10', unitId: 'km2', label: 'Z', factor: 10000000000000 }, 
             { id: 'km2_1',  unitId: 'km2', label: 'E', factor: 1000000000000 }, 
-            // ha
             { id: 'ha_10',  unitId: 'ha',  label: 'Z', factor: 100000000000 }, 
             { id: 'ha_1',   unitId: 'ha',  label: 'E', factor: 10000000000 },
-            // a
             { id: 'a_10',   unitId: 'a',   label: 'Z', factor: 1000000000 }, 
             { id: 'a_1',    unitId: 'a',   label: 'E', factor: 100000000 },
-            // m²
             { id: 'm2_10',  unitId: 'm2',  label: 'Z', factor: 10000000 }, 
             { id: 'm2_1',   unitId: 'm2',  label: 'E', factor: 1000000 }, 
-            // dm²
             { id: 'dm2_10', unitId: 'dm2', label: 'Z', factor: 100000 }, 
             { id: 'dm2_1',  unitId: 'dm2', label: 'E', factor: 10000 },
-            // cm²
             { id: 'cm2_10', unitId: 'cm2', label: 'Z', factor: 1000 },
             { id: 'cm2_1',  unitId: 'cm2', label: 'E', factor: 100 },
-            // mm²
             { id: 'mm2_10', unitId: 'mm2', label: 'Z', factor: 10 },
             { id: 'mm2_1',  unitId: 'mm2', label: 'E', factor: 1 },
         ];
 
         function App() {
             const [digits, setDigits] = useState({});
-            const [sliderColId, setSliderColId] = useState('m2_1'); // Start bei m²
+            const [sliderColId, setSliderColId] = useState('m2_1'); 
             const [showInstructions, setShowInstructions] = useState(false);
             const [isDragging, setIsDragging] = useState(false);
             
             const colRefs = useRef({});
 
-            // Logic: Ziffern ändern
             const updateDigit = (colId, value) => {
                 setDigits(prev => {
                     const next = { ...prev };
@@ -132,7 +122,6 @@
                 else if (e.deltaY > 0) decrementDigit(colId);
             };
 
-            // Logic: Drag & Drop
             const handleDragStart = (e) => {
                 setIsDragging(true);
                 if(e.type === 'mousedown') e.preventDefault();
@@ -147,20 +136,17 @@
                     let closestColId = null;
                     let minDist = Infinity;
 
+                    // FILTER: Nur Spalten berücksichtigen, die auf '_1' enden (Einer-Stellen)
                     Object.entries(colRefs.current).forEach(([id, element]) => {
-                        if (!element) return;
-                        const rect = element.getBoundingClientRect();
+                        if (!element || !id.endsWith('_1')) return;
                         
-                        if (clientX >= rect.left && clientX <= rect.right) {
+                        const rect = element.getBoundingClientRect();
+                        const center = rect.left + rect.width / 2;
+                        const dist = Math.abs(clientX - center);
+
+                        if (dist < minDist) {
+                            minDist = dist;
                             closestColId = id;
-                            minDist = 0; 
-                        } else {
-                            const center = rect.left + rect.width / 2;
-                            const dist = Math.abs(clientX - center);
-                            if (dist < minDist) {
-                                minDist = dist;
-                                closestColId = id;
-                            }
                         }
                     });
 
@@ -188,7 +174,6 @@
                 };
             }, [isDragging, sliderColId]);
 
-            // Logic: Calculation
             const calculateOutput = () => {
                 let total = 0;
                 Object.entries(digits).forEach(([colId, digitStr]) => {
@@ -200,8 +185,6 @@
 
                 const sliderCol = COLUMNS.find(c => c.id === sliderColId);
                 const result = total / sliderCol.factor;
-                
-                // Erhöhte Präzision für Umrechnungen wie mm² -> km²
                 return result.toLocaleString('de-DE', { maximumFractionDigits: 12 });
             };
 
@@ -232,17 +215,23 @@
                 return unit ? unit.label : '';
             };
 
+            // Hilfsfunktion um das Komma beim Klicken auf die Einer-Stelle zu setzen
+            const handleCellClick = (col) => {
+                // Wenn man auf eine Z-Spalte klickt, springt das Komma trotzdem zur E-Spalte der Einheit
+                const targetId = col.id.endsWith('_1') ? col.id : col.unitId + '_1';
+                setSliderColId(targetId);
+            };
+
             return (
                 <div className={`min-h-screen font-sans flex flex-col items-center p-2 md:p-6 select-none relative ${isDragging ? 'cursor-ew-resize' : ''}`}>
                 
-                {/* Header */}
                 <div className="w-full max-w-6xl flex flex-col md:flex-row justify-between items-end mb-6 pb-4 border-b border-stone-200 gap-4">
                     <div>
                     <h1 className="text-3xl font-bold text-slate-700 flex items-center gap-3">
                         <LayoutGrid className="text-indigo-600" size={32} />
-                        Umrechner Flächeneinheiten
+                        Flächen-Tafel
                     </h1>
-                    <p className="text-stone-500 mt-1 ml-1">Stelle mit dem Mausrad oder durch Eingeben die Länge ein. Verschiebe dann das Komma oder klicke auf die gewünschte Einheit</p>
+                    <p className="text-stone-500 mt-1 ml-1">Von km² bis mm² – Jede Einheit hat zwei Stellen.</p>
                     </div>
                     
                     <div className="flex gap-2">
@@ -263,13 +252,9 @@
                     </div>
                 </div>
 
-                {/* --- THE INTERACTIVE BOARD --- */}
-                {/* Scroll-Container: Breite für 7 Einheiten * 2 Spalten angepasst */}
                 <div className="w-full max-w-7xl overflow-x-auto pb-12 px-2 no-scrollbar touch-pan-x">
                     <div className="min-w-[1000px] relative">
                         
-                        {/* 1. UNIT Header Row - Clickable Buttons */}
-                        {/* 7 Einheiten * 2 Spalten = 14 Columns Grid */}
                         <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-1 mb-2">
                             {UNITS.map((unit) => {
                                 const targetColId = `${unit.id}_1`;
@@ -302,7 +287,6 @@
                             })}
                         </div>
 
-                        {/* 2. Grid Cells */}
                         <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-1 bg-stone-200 p-2 rounded-2xl shadow-inner border border-stone-300">
                             {COLUMNS.map((col, index) => {
                                 const display = getCellDisplay(col.id);
@@ -314,7 +298,7 @@
                                         key={col.id}
                                         ref={el => colRefs.current[col.id] = el}
                                         onWheel={(e) => handleWheel(e, col.id)}
-                                        onClick={() => setSliderColId(col.id)}
+                                        onClick={() => handleCellClick(col)}
                                         className={`
                                             relative flex flex-col items-center bg-white shadow-sm border-y border-stone-100 cursor-ns-resize hover:shadow-md transition-shadow
                                             ${col.label === 'Z' ? 'rounded-l-lg ml-0.5 border-l' : ''}
@@ -388,7 +372,6 @@
                             })}
                         </div>
 
-                        {/* 3. Footer Labels */}
                         <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-1 mt-4 px-2">
                              {UNITS.map((unit) => (
                                 <div 
@@ -405,7 +388,6 @@
                     </div>
                 </div>
 
-                {/* RESULT CARD */}
                 <div className="fixed bottom-6 z-40 animate-in slide-in-from-bottom-4 fade-in duration-500">
                     <div className="bg-stone-800/95 backdrop-blur-md text-white p-6 rounded-2xl shadow-2xl border border-stone-600 flex items-center gap-6 min-w-[300px]">
                         <div>
@@ -421,7 +403,6 @@
                     </div>
                 </div>
 
-                {/* INSTRUCTION MODAL */}
                 {showInstructions && (
                     <div 
                         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -458,7 +439,7 @@
                                     </li>
                                     <li>
                                         <strong>Ablesen:</strong><br/>
-                                        Verschiebe das rote Komma hinter die <strong className="text-indigo-600">E</strong>-Spalte der Einheit, in die du umrechnen möchtest.
+                                        Verschiebe das rote Komma hinter die <strong className="text-indigo-600">E</strong>-Spalte der Einheit, in die du umrechnen möchtest. Das Komma rastet automatisch nur hinter ganzen Einheiten ein.
                                     </li>
                                 </ol>
                             </div>
@@ -483,4 +464,3 @@
     </script>
 </body>
 </html>
-
